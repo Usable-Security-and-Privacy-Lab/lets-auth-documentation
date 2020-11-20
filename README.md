@@ -1,1 +1,2 @@
-# lets-auth-documentation
+# Let's Authenticate Documentation
+
