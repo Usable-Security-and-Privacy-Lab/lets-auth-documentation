@@ -88,7 +88,7 @@ The documentation for Let's Authenticate is covered in the following:
 - [Service Authentication](./serviceAuthentication.md): Shows how a user
   authenticates with a service using an authenticator.2
 
-- [Account Recovery](./accountRecovery.md): Shows how the authenticators store
+- [Recovery Data](./recoveryData.md): Shows how the authenticators store
   and synchronize recovery data with the certificate authority, which is used to
   associate account identifiers and secrets with services. Knowing the account
   identifier for a service allows the authenticator to ask the CA for a new

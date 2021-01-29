@@ -1,6 +1,8 @@
-# Account Recovery
+# Recovery Data
 
-An authenticator encrypts and stores recovery data for the user. This consists
+An authenticator encrypts and stores recovery data for the user. This enables the user to easily use multiple authenticators and replace a lost authenticator.
+
+The recovery data consists
 of a mapping from services to a set of information that includes the secret for
 that service, the current service certificates, and the associated authenticator
 device names. The authenticator encrypts the recovery data in the same way as a
