@@ -53,14 +53,88 @@ The potential responses are:
 
 The webCertificate is used to verify the signature on the sessionObject.
 
-## Service Certificate
+## Bulk Service Certificates
 
-Once the authenticator validates the signed object it checks whether it has a
-valid _service certificate_ for the desired service. If it does not, it obtains
-a service certificate from the CA. To do this, it creates a new service key
-pair, `servicePrivateKey` and `servicePublicKey`. If the `type` from the
-`sessionObject` is registration, then it generates a random identifier,
-`accountID`. Otherwise, it reuses the existing `accountID` for this web service.
+An authenticator should obtain service certificates in bulk because this (a)
+speeds up the account registration process when the user registers with a new
+service and (b) avoids leaking to the CA that the authenticator has created a
+new account with a service.
+
+To obtain service certificates in a batch, the authenticator creates a
+`servicePrivateKey` and `servicePublicKey` for each certificate.
+
+The authenticator then generates a random `accountID` and a CSR for each
+`servicePublicKey`:
+
+```
+CSR = certificateSigningRequest(accountID,servicePublicKey)
+```
+
+Each CSR is signed by the `authenticatorPrivateKey`. The authenticator sends the
+CSRs to the authenticator as follows.
+
+### authenticator -> CA
+
+| Method | Path                               | Arguments                                      |
+| ------ | ---------------------------------- | ---------------------------------------------- |
+| POST   | /la0.2/user/:username/servicebatch | [CSR, authSignature, authenticatorCertificate] |
+
+where
+
+- the argument is a list
+- authSignature is a signature of the CSR with the `authenticatorPrivateKey`, so
+  that the CA can verify the authenticator is authorized to claim ownership of
+  the `accountID`.
+
+The potential responses are:
+
+- 200 OK : success, with the body containing serviceCertificates
+
+If any `accountID` is already taken by another user, the CSR does not return a
+`serviceCertificate` for that ID. In the highly unusual case where all
+`accountID`s collide, the returned value may be an empty list.
+
+Each `serviceCertificate` contains `(accountID, servicePublicKey)` and is signed
+by the `caPrivateKey`.
+
+## Service Certificates for Registration
+
+When registering for an account, the authenticator should first check the
+recovery data in case an account has already been created. If the authenticator
+has an `accountID` for this service, then it alerts the user to determine
+whether they want to register for another account or use the existing one.
+
+When a user has multiple accounts with a service, the authenticator should
+include functionality to allow the user to associate a human-readable name with
+each `accountID` to distinguish them.
+
+The authenticator should obtain service certificates in batches, as described
+above.
+
+## Service Certificates for Login
+
+The authenticator first checks the recovery data to determine whether there is
+an existing `accountID` for this service and then checks whether it owns a valid
+`service certificate` for this accountID.
+
+If there is no existing `accountID` for this service, then the user must
+register for an account first before logging in. The authenticator shows an
+error message explaining this to the user.
+
+If the authenticator knows the `accountID` and has a valid service certificate,
+it proceeds to obtaining a _session certificate_.
+
+If the authenticator knows the `accountID`, but has no valid service certificate
+(because its current service certificate has expired or it has never obtained
+one for this service), then it must obtain a new service certificate.
+
+The authenticator should renew its service certificates before they expire, but
+can use the following to either obtain or renew a service certificate.
+
+When renewing a certificate, the authenticator should have a `servicePrivateKey`
+and `servicePublicKey` for this service. When obtaining a new service
+certificate, it should create the pair.
+
 The authenticator then generates a CSR:
 
 ```
@@ -89,11 +163,10 @@ The potential responses are:
 The `serviceCertificate` contains (accountID, servicePublicKey) and is signed by
 the `caPrivateKey`.
 
-If the authenticator receives a 403 error upon registration, then it chooses a
-new random `accountID`. If the authenticator receives a 403 error upon login,
-then their account has been hijacked and an error is reported to the user.
+If the authenticator receives a 403 error then their account has been hijacked
+and the authenticator reports an error to the user.
 
-## Session Certificate
+## Session Certificates
 
 Once the authenticator has obtained a valid service certificate, it can
 authenticate with the service. If the authenticator is completing registration,
