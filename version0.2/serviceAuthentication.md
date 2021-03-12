@@ -6,13 +6,14 @@ login with a web service.
 ## Client Request
 
 To authenticate to a web service, the client requests a session object from the
-web server:
+web server and specifies if the user has selected registration by specifiying a 
+`isRegistration` boolean:
 
 ### client -> web service
 
-| Method | Path               | Arguments |
-| ------ | ------------------ | --------- |
-| GET    | /la0.2/api/session |           |
+| Method | Path               | Arguments      |
+| ------ | ------------------ | -------------- |
+| GET    | /la0.2/api/session | isRegistration |
 
 The potential responses are:
 
@@ -123,6 +124,7 @@ where
 The potential responses are:
 
 - 200 OK : success, with the body containing serviceCertificates
+- 403 Forbidden: accountID claimed by another user, failed to verify RSA signature for CSR request
 
 If any `accountID` is already taken by another user, the CSR does not return a
 `serviceCertificate` for that ID. In the highly unusual case where all
@@ -160,7 +162,7 @@ where
 The potential responses are:
 
 - 200 OK : success, with the body containing serviceCertificate
-- 403 Forbidden: accountID claimed by another user
+- 403 Forbidden: accountID claimed by another user, failed to verify RSA signature for CSR request
 
 The `serviceCertificate` contains (accountID, servicePublicKey) and is signed by
 the `caPrivateKey`.
@@ -179,38 +181,17 @@ service.
 The authenticator then creates a `sessionCertificate`, which contains
 (sessionID, sessionPublicKey) and is signed by the `servicePrivateKey`.
 
-If the authenticator is registering a new account with the web service, then it
-sends a POST request to the web service to register the account and authorize
-the login:
-
-### authenticator -> service
-
-| Method | Path                | Arguments                               |
-| ------ | ------------------- | --------------------------------------- |
-| POST   | /la0.2/api/register | serviceCertificate, sessionCertificate, |
-
-The potential responses are:
-
-- 200 OK : success
-- 403 Forbidden: invalid certificates
-
-The web service validates the `serviceCertificate` using the `CAPublicKey`. It
-validates the `sessionCertificate` using the `servicePublicKey` and ensuring the
-`sessionID` is one it recently issued. If these are both valid, the web service
-uses the `servicePublicKey` as an account identifier and stores the
-`serviceSecret` with that account.
-
 ## Registration
 
 If the authenticator is registering a new account with the web service, then it
 sends a POST request to the web service to register the account and authorize
 the login:
 
-### authenticator -> service
+### authenticator -> web service
 
 | Method | Path                | Arguments                               |
 | ------ | ------------------- | --------------------------------------- |
-| POST   | /la0.1/api/register | serviceCertificate, sessionCertificate, |
+| POST   | /la0.2/api/register | serviceCertificate, sessionCertificate, |
 
 The potential responses are:
 
@@ -228,7 +209,7 @@ uses the `servicePublicKey` as an account identifier and stores the
 If the authenticator is logging into an existing account with the web service,
 then it sends a POST request to the web service to authorize the login:
 
-### authenticator -> service
+### authenticator -> web service
 
 | Method | Path             | Arguments                               |
 | ------ | ---------------- | --------------------------------------- |
@@ -262,7 +243,7 @@ registration or login is done, and the server doesn't respond until the
 authentication is complete. The client can time out the connection if it takes
 too long (10s) and try again.
 
-### client -> service
+### client -> web service
 
 | Method | Path                | Arguments |
 | ------ | ------------------- | --------- |
