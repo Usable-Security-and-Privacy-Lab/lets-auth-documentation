@@ -6,7 +6,7 @@ login with a web service.
 ## Client Request
 
 To authenticate to a web service, the client requests a session object from the
-web server and specifies if the user has selected registration by specifiying a 
+web server and specifies if the user has selected registration by specifiying the 
 `isRegistration` boolean:
 
 ### client -> web service
@@ -247,8 +247,8 @@ too long (10s) and try again.
 
 | Method | Path                | Arguments |
 | ------ | ------------------- | --------- |
-| GET    | /la0.2/api/register | N/A       |
-| GET    | /la0.2/api/login    | N/A       |
+| GET    | /la0.2/api/register | sessionID |
+| GET    | /la0.2/api/login    | sessionID |
 
 The potential responses are:
 
