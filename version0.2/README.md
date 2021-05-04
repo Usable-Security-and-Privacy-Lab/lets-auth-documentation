@@ -100,3 +100,6 @@ The documentation for Let's Authenticate is covered in the following:
 - [Detecting Malicious Account Access](./detectingMalicousAccess.md): TBD
 
 - [Revocation](./revocation.md): TBD
+
+- Account Recovery
+- Logging out Remotely
