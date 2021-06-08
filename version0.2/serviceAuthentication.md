@@ -1,14 +1,14 @@
 # Service Authentication
 
 Service authentication begins with a client requesting either registration or
-login with a web service.
+login with a relying party.
 
 ## Client Request
 
-To authenticate to a web service, the client requests a session object from the
-web server:
+To authenticate to a relying party, the client requests a session object from
+the web server:
 
-### client -> web service
+### client -> relying party
 
 | Method | Path               | Arguments |
 | ------ | ------------------ | --------- |
@@ -21,11 +21,11 @@ The potential responses are:
 
 A sessionObject consists of:
 
-- domain: the domain of the web service
+- domain: the domain of the relying party
 - sessionID: a unique session ID for this client
 - type: the string 'registration' or 'login'
 
-The sesssionObject is signed by the private key of the web service.
+The sessionObject is signed by the private key of the relying party.
 
 ## Authenticator Transfer
 
@@ -37,10 +37,10 @@ The client device relays the sessionObject to the authenticator via:
 - providing the information in a deep link for a desktop authenticator
 - transferring it to the authenticator using CTAP2
 
-The authenticator contacts the web service at the given `domain` to get
-additional information from the web service:
+The authenticator contacts the relying party at the given `domain` to get
+additional information from the relying party:
 
-### authenticator -> web service
+### authenticator -> relying party
 
 | Method | Path            | Arguments |
 | ------ | --------------- | --------- |
@@ -48,108 +48,61 @@ additional information from the web service:
 
 The potential responses are:
 
-- 200 OK: success, with the body containing the web service's webCertificate
+- 200 OK: success, with the body containing the relying party's webCertificate
 - 404 Not Found: protocol not supported
 
 The webCertificate is used to verify the signature on the sessionObject.
 
-## Obtaining New
-
-## Service Certificates for Registration
+## Account Certificates for Registration
 
 When registering for an account, the authenticator should first check the
 recovery data in case an account has already been created. If the authenticator
-has an `accountID` for this service, then it alerts the user to determine
+has an `accountID` for this relying party, then it alerts the user to determine
 whether they want to register for another account or use the existing one.
 
-When a user has multiple accounts with a service, the authenticator should
+When a user has multiple accounts with a relying party, the authenticator should
 include functionality to allow the user to associate a human-readable name with
 each `accountID` to distinguish them.
 
-The authenticator should obtain service certificates in batches, as described
-below.
-
-## Service Certificates for Login
+## Account Certificates for Login
 
 The authenticator first checks the recovery data to determine whether there is
-an existing `accountID` for this service and then checks whether it owns a valid
-`service certificate` for this accountID.
+an existing `accountID` for this relying party and then checks whether it owns a
+valid `account certificate` for this accountID.
 
-If there is no existing `accountID` for this service, then the user must
+If there is no existing `accountID` for this relying party, then the user must
 register for an account first before logging in. The authenticator shows an
 error message explaining this to the user.
 
-If the authenticator knows the `accountID` and has a valid service certificate,
+If the authenticator knows the `accountID` and has a valid account certificate,
 it proceeds to obtaining a _session certificate_.
 
-If the authenticator knows the `accountID` and has a valid `servicePrivateKey` and `servicePublicKey` 
-for this service, but its `service certificate` has expired, it can renew the service certificate as described below. Otherwise, it may obtain a new service certificate as also described below. 
+If the authenticator knows the `accountID` and has a valid `accountPrivateKey`
+and `accountPublicKey` for this relying party, but its `account certificate` has
+expired, it can renew the account certificate as described below. Otherwise, it
+may obtain a new account certificate as also described below.
 
-The authenticator should renew its service certificates before they expire.
+The authenticator should renew its account certificates before they expire.
 
-## Obtaining New Service Certificates
+## Obtaining or Renewing Account Certificates
 
-An authenticator should obtain service certificates in bulk because this (a)
-speeds up the account registration process when the user registers with a new
-service and (b) avoids leaking to the CA that the authenticator has created a
-new account with a service.
-
-To obtain service certificates in a batch, the authenticator creates a
-`servicePrivateKey` and `servicePublicKey` for each certificate.
-
-The authenticator then generates a random `accountID` and a CSR for each
-`servicePublicKey`:
-
-```
-CSR = certificateSigningRequest(accountID,servicePublicKey)
-```
-
-Each CSR is signed by the `authenticatorPrivateKey`. The authenticator sends the
-CSRs to the authenticator as follows.
-
-### authenticator -> CA
-
-| Method | Path                               | Arguments                                      |
-| ------ | ---------------------------------- | ---------------------------------------------- |
-| POST   | /la0.2/user/:username/servicebatch | [CSR, authSignature, authenticatorCertificate] |
-
-where
-
-- the argument is a list
-- authSignature is a signature of the CSR with the `authenticatorPrivateKey`, so
-  that the CA can verify the authenticator is authorized to claim ownership of
-  the `accountID`.
-
-The potential responses are:
-
-- 200 OK : success, with the body containing serviceCertificates
-
-If any `accountID` is already taken by another user, the CSR does not return a
-`serviceCertificate` for that ID. In the highly unusual case where all
-`accountID`s collide, the returned value may be an empty list.
-
-Each `serviceCertificate` contains `(accountID, servicePublicKey)` and is signed
-by the `caPrivateKey`.
-
-## Renewing a Service Certificate
-
-When renewing a certificate, the authenticator should have a `servicePrivateKey`
-and `servicePublicKey` for this service. When obtaining a new service
-certificate, it should create the pair.
+To obtain an account certificate, the authenticator needs to generate an
+`accountPrivateKey` and `accountPublicKey` for this relying party. When renewing
+an account certificate, it should already have this pair for the relying party.
 
 The authenticator then generates a CSR:
 
 ```
-CSR = certificateSigningRequest(accountID,servicePublicKey)
+CSR = certificateSigningRequest(accountID,accountPublicKey)
 ```
 
-that is signed by the `authenticatorPrivateKey`.
+that is signed by the `accountPrivateKey`.
 
 ### authenticator -> CA
 
 | Method | Path                          | Arguments                                    |
 | ------ | ----------------------------- | -------------------------------------------- |
-| POST   | /la0.2/user/:username/service | CSR, authSignature, authenticatorCertificate |
+| POST   | /la0.2/user/:username/account | CSR, authSignature, authenticatorCertificate |
 
 where
 
@@ -159,91 +112,74 @@ where
 
 The potential responses are:
 
-- 200 OK : success, with the body containing serviceCertificate
+- 200 OK : success, with the body containing accountCertificate
 - 403 Forbidden: accountID claimed by another user
 
-The `serviceCertificate` contains (accountID, servicePublicKey) and is signed by
+The `accountCertificate` contains (accountID, accountPublicKey) and is signed by
 the `caPrivateKey`.
 
-If the authenticator receives a 403 error then their account has been hijacked
-and the authenticator reports an error to the user.
+If the authenticator receives a 403 error when obtaining a new certificate, then
+this accountID has already been claimed, so it needs to generate a new one and
+try again. If it receives a 403 error when renewing a certificate, then their
+account has been hijacked and the authenticator reports an error to the user.
 
 ## Session Certificates
 
-Once the authenticator has obtained a valid service certificate, it can
-authenticate with the service. If the authenticator is completing registration,
-it creates a random secret, `serviceSecret` that it uses for this service only.
-Otherwise it finds the `serviceSecret` it has previously used for this web
-service.
+Once the authenticator has obtained a valid account certificate, it can
+authenticate with the relying party. If the authenticator is completing
+registration, it generates a new key pair, `sessionPublicKey` and
+`sessionPrivateKey` that is unique to this relying party. It must then
+synchronize this key pair with the authenticator data. When logging in, the
+authenticator should find the key pair it has previously used for this relying
+party in the authenticator data.
 
 The authenticator then creates a `sessionCertificate`, which contains
-(sessionID, sessionPublicKey) and is signed by the `servicePrivateKey`.
-
-If the authenticator is registering a new account with the web service, then it
-sends a POST request to the web service to register the account and authorize
-the login:
-
-### authenticator -> service
-
-| Method | Path                | Arguments                               |
-| ------ | ------------------- | --------------------------------------- |
-| POST   | /la0.2/api/register | serviceCertificate, sessionCertificate, |
-
-The potential responses are:
-
-- 200 OK : success
-- 403 Forbidden: invalid certificates
-
-The web service validates the `serviceCertificate` using the `CAPublicKey`. It
-validates the `sessionCertificate` using the `servicePublicKey` and ensuring the
-`sessionID` is one it recently issued. If these are both valid, the web service
-uses the `servicePublicKey` as an account identifier and stores the
-`serviceSecret` with that account.
+(sessionID, sessionPublicKey) and is signed by the `accountPrivateKey`.
 
 ## Registration
 
-If the authenticator is registering a new account with the web service, then it
-sends a POST request to the web service to register the account and authorize
-the login:
+If the authenticator is registering a new account with the relying party, then
+it sends a POST request to the relying party to register the account and
+authorize the login:
 
-### authenticator -> service
+### authenticator -> relying party
 
 | Method | Path                | Arguments                               |
 | ------ | ------------------- | --------------------------------------- |
-| POST   | /la0.1/api/register | serviceCertificate, sessionCertificate, |
+| POST   | /la0.2/api/register | accountCertificate, sessionCertificate, |
 
 The potential responses are:
 
 - 200 OK : success
 - 403 Forbidden: invalid certificates
 
-The web service validates the `serviceCertificate` using the `CAPublicKey`. It
-validates the `sessionCertificate` using the `servicePublicKey` and ensures the
-`sessionID` is one it recently issued. If these are both valid, the web service
-uses the `servicePublicKey` as an account identifier and stores the
-`serviceSecret` with that account.
+The relying party validates the `accountCertificate` using the `CAPublicKey`. It
+validates the `sessionCertificate` using the `accountPublicKey` and ensures the
+`sessionID` is one it recently issued. If these are both valid, the relying
+party uses the `accountID` as an account identifier and stores the
+`sessionPublicKey` with that account.
 
 ## Login
 
-If the authenticator is logging into an existing account with the web service,
-then it sends a POST request to the web service to authorize the login:
+If the authenticator is logging into an existing account with the relying party,
+then it sends a POST request to the relying party to authorize the login:
 
-### authenticator -> service
+### authenticator -> relying party
 
 | Method | Path             | Arguments                               |
 | ------ | ---------------- | --------------------------------------- |
-| POST   | /la0.2/api/login | serviceCertificate, sessionCertificate, |
+| POST   | /la0.2/api/login | accountCertificate, sessionCertificate, |
 
 The potential responses are:
 
 - 200 OK : success
 - 403 Forbidden: invalid certificates
 
-The web service validates the `serviceCertificate` using the `CAPublicKey`. It
-validates the `sessionCertificate` using the `servicePublicKey` and ensures the
-`sessionID` is one it recently issued. It compares the the `serviceSecret` in
-the `sessionCertificate` with the one stored in the account. if all of these
-checks pass, the web service OKs the login.
+The relying party validates the `accountCertificate` using the `CAPublicKey`. It
+validates the `sessionCertificate` using the `accountPublicKey` and ensures the
+`sessionID` is one it recently issued. It compares the `sessionPublicKey` in the
+`sessionCertificate` with the one stored in the account. if all of these checks
+pass, the relying party OKs the login.
 
 ## Notifying the client
 
@@ -262,12 +198,12 @@ registration or login is done, and the server doesn't respond until the
 authentication is complete. The client can time out the connection if it takes
 too long (10s) and try again.
 
-### client -> service
+### client -> relying party
 
-| Method | Path                | Arguments |
-| ------ | ------------------- | --------- |
-| GET    | /la0.2/api/register | N/A       |
-| GET    | /la0.2/api/login    | N/A       |
+| Method | Path                                  | Arguments |
+| ------ | ------------------------------------- | --------- |
+| GET    | /la0.2/api/register?session=sessionID | N/A       |
+| GET    | /la0.2/api/login?session=sessionID    | N/A       |
 
 The potential responses are:
 
@@ -278,3 +214,18 @@ Alternatively, the client can open a web socket to the back end, and then the
 back end can push a message when the registration or login is done. Long polling
 is preferred due to its simplicity -- the back end does not need to support an
 extra web socket for these requests.
+
+## Logout
+
+The client can logout using the following method.
+
+### client -> relying party
+
+| Method | Path                                | Arguments |
+| ------ | ----------------------------------- | --------- |
+| GET    | /la0.2/api/logout?session=sessionID | N/A       |
+
+The potential responses are:
+
+- 200 OK : success
+- 403 Forbidden: request denied
