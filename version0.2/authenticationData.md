@@ -75,6 +75,8 @@ The potential responses are:
 - 200 OK: success, with the body including the encrypted authentication data
 - 403 Forbidden: access denied due to an error validating the authenticator
   certificate
+- 404 Not Found: Authentication certificate is valid but no authentication data was found. 
+  Should only occur when first called after account registration.
 
 The server response should use the `Etag` header, so that the authenticator
 request can use the `If-None-Match` header to validate whether its cached
