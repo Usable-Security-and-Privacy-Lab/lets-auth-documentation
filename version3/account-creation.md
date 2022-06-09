@@ -20,7 +20,7 @@ Once this is done, the authenticator calls the following endpoint:
 
 | Method | Path                                  | Body |
 | ------ | ------------------------------------- | ---- |
-| GET    | /la0.3/account/create/begin/:username | -    |
+| GET    | /la0.3/account/create-begin/:username | -    |
 
 Possible return values include:
 
@@ -61,7 +61,7 @@ It uses this credential to call this endpoint:
 
 | Method | Path                                   | Body                         |
 | ------ | -------------------------------------- | ---------------------------- |
-| POST   | /la0.3/account/create/finish/:username | credential, CSR, backupCodes |
+| POST   | /la0.3/account/create-finish/:username | credential, CSR |
 
 Possible return values include:
 
