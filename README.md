@@ -2,10 +2,9 @@
 
 Current version:
 
-- [Version 3](./version3/README)
+- [Version 3](./version3/)
 
 Old versions:
 
-- [Version 2](./version2/README)
-- [Version 1](./version1/README)
-
+- [Version 2](./version2/)
+- [Version 1](./version1/)
