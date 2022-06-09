@@ -16,7 +16,7 @@ should be 10 days.
 
 Once this is done, the authenticator calls the following endpoint:
 
-### authenticator -> CA
+### authenticator → CA
 
 | Method | Path                                  | Body |
 | ------ | ------------------------------------- | ---- |
@@ -57,7 +57,7 @@ credential:
 
 It uses this credential to call this endpoint:
 
-### authenticator -> CA
+### authenticator → CA
 
 | Method | Path                                   | Body                         |
 | ------ | -------------------------------------- | ---------------------------- |

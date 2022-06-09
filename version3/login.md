@@ -13,7 +13,7 @@ $K_{auth}, S_{auth}$. Otherwise it should have these stored locally.
 The login process is nearly identical to the account creation process. The
 authenticator uses FIDO2 and calls the following endpoint:
 
-### authenticator -> CA
+### authenticator → CA
 
 | Method | Path                                 | Body |
 | ------ | ------------------------------------ | ---- |
@@ -53,7 +53,7 @@ credential:
 
 It uses this credential to call this endpoint:
 
-### authenticator -> CA
+### authenticator → CA
 
 | Method | Path                                   | Body                         |
 | ------ | -------------------------------------- | ---------------------------- |
