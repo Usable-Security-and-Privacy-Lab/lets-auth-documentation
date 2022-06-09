@@ -1,6 +1,6 @@
-# Version 0.2
+# Version 2
 
-This document describes Version 0.2 of the Let's Authenticate System.
+This document describes Version 2 of the Let's Authenticate System.
 
 ## Terminology
 
