@@ -1,22 +1,37 @@
 # Account Creation
 
-To create an account with a certificate authority (CA), a user installs the
-authenticator software on a device. After installation, the authenticator should
+The authenticator relies on the web browser to create an account with the CA using FIDO2. Once the account is created, the browser can authorize the authenticator for this user's account by obtaining an authenticator certificate.
 
-- prompt the user for a name for this device and
-- create an account with the CA
+The authenticator takes the following steps.
 
-## Creating an account
+## Initiating registration with the browser
 
-To create an account with the CA, the authenticator uses FIDO2. It starts by
-creating an `authenticator key pair`, $K_{auth}, S_{auth}$, and then generates a
-certificate signing request (CSR) that contains only the username and this key
-pair and no identifying information. The default expiration time for the CSR
-should be 10 days.
+The authenticator starts by asking the user for:
 
-Once this is done, the authenticator calls the following endpoint:
+- a username
+- a password (or authorization to use a biometric if the authenticator is a phone)
 
-### authenticator → CA
+> If the authenticator is a browser extension, it uses the password to derive a symmetric key, which it uses to encrypt data it stores locally.
+
+> If the authenticator is a phone, it ... (TBD)
+
+The authenticator then generates n `authenticator key pair`, $K_{auth}, S_{auth}$.
+
+Once this is done, the authenticator opens a new browser tab, using the following URL:
+
+`http://api.letsauth.org/register/{username}/?authPublicKey={authPublicKey}`
+            
+where
+
+`authPublicKey = $K_{auth}`
+
+This will allow the user to create an account with the CA and simultaneously authorize $K_{auth}$ for their account.
+
+## Browser interactions with the CA
+
+The browser will then use the Let's Authenticate CA web site to register an account with the CA, using the FIDO2 protocol. The browser calls the following endpoint:
+
+### browser → CA
 
 | Method | Path                                  | Body |
 | ------ | ------------------------------------- | ---- |
@@ -28,22 +43,7 @@ Possible return values include:
 - 403 Forbidden: username already exists
 - 50X: any other errors
 
-If the username already exists, the authenticator should abort the account
-creation process and inform the user that the username already exists.
-
-The response to this request contains `credential creation options` that guide
-the authenticator on how to use FIDO2 to authenticate with the CA.
-
-**If the authenticator is a browser extension, it sets the relying party ID for
-the public key in the credential creation options to be equal to the browser
-extension ID.**
-
-The authenticator then interacts with the browser to initiate FIDO2
-registration.
-
-**If the authenticator is a browser extension, it calls
-`navigator.credentials.create()`, passing it the public key of the CA, from the
-credential creation options.**
+If the username already exists, the browser should inform the user that the username already exists so they can retry with a different username.
 
 When the authenticator finishes interacting with the user, it receives a
 credential:
@@ -61,7 +61,7 @@ It uses this credential to call this endpoint:
 
 | Method | Path                                   | Body                         |
 | ------ | -------------------------------------- | ---------------------------- |
-| POST   | /la3/account/create-finish/:username | credential, CSR |
+| POST   | /la3/account/create-finish/:username | credential, authPublicKey |
 
 Possible return values include:
 
@@ -81,7 +81,36 @@ Note that the combination of credential and CSR are sent using JSON as:
   - response
     - attestationObject
     - clientDataJSON
-- CSR
+- authPublicKey
+
+The CA adds the `authPublicKey` to a list of authorized authenticator public keys for that user's account.
+
+## Getting an authenticator certificate
+
+Once the user finishes creating their account with the CA, the authenticator should prompt them to finish the account creation process.
+
+> If the authenticator is a phone, it should be able to include a link that, when clicked, opens the authenticator app to indicate the user is ready to move to the next step.
+
+To obtain an authenticator certificate, the authenticator generates a
+certificate signing request (CSR) that contains only the username and this key
+pair and no identifying information. It then calls this endpoint:
+
+
+### authenticator → CA
+
+| Method | Path                                   | Body                         |
+| ------ | -------------------------------------- | ---------------------------- |
+| POST   | /la3/account/sign-csr/:username | CSR |
+
+Possible return values include:
+
+- 200 OK : success
+- 403 Forbidden: there is no authentication cookie present, the CSR is not properly signed,
+  or the username in the CSR is not owned by this user
+- 50X: any other errors
+
+The response includes an `authenticator certificate` if no other error occurs.
+
 
 The CA verifies that the CSR is signed properly and then generates and returns
 an `authenticator certificate`. This certificate contains (username, $K_{auth}$)
