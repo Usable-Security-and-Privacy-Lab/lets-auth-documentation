@@ -12,12 +12,22 @@ the web server:
 
 | Method | Path               | Arguments |
 | ------ | ------------------ | --------- |
-| GET    | /la0.2/api/session |           |
+| GET    | /la3/session/:type |           |
+
+The type can be:
+
+- register
+- login
 
 The potential responses are:
 
-- 200 OK: success, with the body containing a sessionObject
+- 200 OK: success
 - 404 Not Found: protocol not supported
+
+A successful request returns a JSON object with:
+
+- session Object
+- signature of the session object
 
 A sessionObject consists of:
 
@@ -25,11 +35,20 @@ A sessionObject consists of:
 - sessionID: a unique session ID for this client
 - type: the string 'registration' or 'login'
 
-The sessionObject is signed by the private key of the relying party.
+The relying party converts the sessionObject to a JSON string and signs it with
+its private key. This can be done with the `node:crypto` library, as follows:
+
+```javascript
+const sign = createSign("SHA256");
+sign.write(sessionString);
+sign.end();
+const signature = sign.sign(privateKey, "hex");
+```
 
 ## Authenticator Transfer
 
-The client device relays the sessionObject to the authenticator via:
+The client device relays the sessionObject and the signature to the
+authenticator via:
 
 - presenting it as a QR code for scanning by a smartphone authenticator
 - providing the information in hidden form fields for a browser extension
@@ -37,28 +56,29 @@ The client device relays the sessionObject to the authenticator via:
 - providing the information in a deep link for a desktop authenticator
 - transferring it to the authenticator using CTAP2
 
-The authenticator contacts the relying party at the given `domain` to get
-additional information from the relying party:
+Once the authenticator obtains this, it contacts the relying party at the given
+`domain` to get additional information from the relying party:
 
 ### authenticator -> relying party
 
 | Method | Path            | Arguments |
 | ------ | --------------- | --------- |
-| GET    | /la0.2/api/info |           |
+| GET    | /la3/public-key |           |
 
 The potential responses are:
 
-- 200 OK: success, with the body containing the relying party's webCertificate
+- 200 OK: success, with the body containing the relying party's public key
 - 404 Not Found: protocol not supported
 
-The webCertificate is used to verify the signature on the sessionObject.
+The relying party's public key is used to verify the signature on the
+sessionObject.
 
 ## Account Certificates for Registration
 
-When registering for an account, the authenticator should first check the
-recovery data in case an account has already been created. If the authenticator
-has an `accountID` for this relying party, then it alerts the user to determine
-whether they want to register for another account or use the existing one.
+When registering for an account, the authenticator should first check the vault
+in case an account has already been created. If the authenticator has an
+`accountID` for this relying party, then it alerts the user to determine whether
+they want to register for another account or use the existing one.
 
 When a user has multiple accounts with a relying party, the authenticator should
 include functionality to allow the user to associate a human-readable name with
@@ -66,8 +86,8 @@ each `accountID` to distinguish them.
 
 ## Account Certificates for Login
 
-The authenticator first checks the recovery data to determine whether there is
-an existing `accountID` for this relying party and then checks whether it owns a
+The authenticator first checks the vault to determine whether there is an
+existing `accountID` for this relying party and then checks whether it owns a
 valid `account certificate` for this accountID.
 
 If there is no existing `accountID` for this relying party, then the user must
@@ -100,28 +120,45 @@ that is signed by the `accountPrivateKey`.
 
 ### authenticator -> CA
 
-| Method | Path                          | Arguments                                    |
-| ------ | ----------------------------- | -------------------------------------------- |
-| POST   | /la0.2/user/:username/account | CSR, authSignature, authenticatorCertificate |
+| Method | Path                        | Arguments                                    |
+| ------ | --------------------------- | -------------------------------------------- |
+| POST   | /la3/user/:username/account | CSR, authSignature, authenticatorCertificate |
 
 where
 
-- authSignature is a signature of the CSR with the `authenticatorPrivateKey`, so
-  that the CA can verify the authenticator is authorized to claim ownership of
-  the `accountID`.
+- authSignature is an additional signature of the CSR with the
+  `authenticatorPrivateKey`, so that the CA can verify the authenticator is
+  authorized to claim ownership of the `accountID`.
 
 The potential responses are:
 
-- 200 OK : success, with the body containing accountCertificate
-- 403 Forbidden: accountID claimed by another user
+- 200 OK : success
+- 403 Forbidden
+
+A successful request contains a JSON object with:
+
+- accountCertificate
 
 The `accountCertificate` contains (accountID, accountPublicKey) and is signed by
-the `caPrivateKey`.
+the `caPrivateKey`. It has a lifetime of 1 minute.
 
-If the authenticator receives a 403 error when obtaining a new certificate, then
-this accountID has already been claimed, so it needs to generate a new one and
-try again. If it receives a 403 error when renewing a certificate, then their
-account has been hijacked and the authenticator reports an error to the user.
+The CA will perform the following checks before issuing the account certificate:
+
+- an account exists for this username
+- the account ID has not already been claimed by another user
+- verify the `authenticatorCertificate`
+  - it is signed by the CA's private key
+  - the username in the certificate matches the username in the API request
+- verify the `authSignature` of the CSR using `authenticatorPublicKey` from the
+  `authenticatorCertificate`
+- verify the signature in the CSR using `accountPublicKey`
+
+If any of these verifications fail, the server returns 403 Forbidden and a text
+message in the body indicating the reason for the error.
+
+If an authenticator receives a 403 error when obtaining an account certificate
+for an existing accountID (for login, not registration), then their account has
+been hijacked and the authenticator reports an error to the user.
 
 ## Session Certificates
 
@@ -129,9 +166,9 @@ Once the authenticator has obtained a valid account certificate, it can
 authenticate with the relying party. If the authenticator is completing
 registration, it generates a new key pair, `sessionPublicKey` and
 `sessionPrivateKey` that is unique to this relying party. It must then
-synchronize this key pair with the authenticator data. When logging in, the
-authenticator should find the key pair it has previously used for this relying
-party in the authenticator data.
+synchronize this key pair with the vault. When logging in, the authenticator
+should find the key pair it has previously used for this relying party in the
+vault.
 
 The authenticator then creates a `sessionCertificate`, which contains
 (sessionID, sessionPublicKey) and is signed by the `accountPrivateKey`.
@@ -144,20 +181,21 @@ authorize the login:
 
 ### authenticator -> relying party
 
-| Method | Path                | Arguments                               |
-| ------ | ------------------- | --------------------------------------- |
-| POST   | /la0.2/api/register | accountCertificate, sessionCertificate, |
+| Method | Path          | Arguments                              |
+| ------ | ------------- | -------------------------------------- |
+| POST   | /la3/register | accountCertificate, sessionCertificate |
 
 The potential responses are:
 
 - 200 OK : success
 - 403 Forbidden: invalid certificates
 
-The relying party validates the `accountCertificate` using the `CAPublicKey`. It
-validates the `sessionCertificate` using the `accountPublicKey` and ensures the
-`sessionID` is one it recently issued. If these are both valid, the relying
-party uses the `accountID` as an account identifier and stores the
-`sessionPublicKey` with that account.
+The relying party validates the `accountCertificate` using the `CAPublicKey`.
+For demo purposes, the replying party can be configured with the `CAPublicKey`.
+The relying party validates the `sessionCertificate` using the
+`accountPublicKey` and ensures the `sessionID` is one it recently issued. If
+these are both valid, the relying party uses the `accountID` as an account
+identifier and stores the `sessionPublicKey` with that account.
 
 ## Login
 
@@ -166,9 +204,9 @@ then it sends a POST request to the relying party to authorize the login:
 
 ### authenticator -> relying party
 
-| Method | Path             | Arguments                               |
-| ------ | ---------------- | --------------------------------------- |
-| POST   | /la0.2/api/login | accountCertificate, sessionCertificate, |
+| Method | Path       | Arguments                              |
+| ------ | ---------- | -------------------------------------- |
+| POST   | /la3/login | accountCertificate, sessionCertificate |
 
 The potential responses are:
 
@@ -200,10 +238,10 @@ too long (10s) and try again.
 
 ### client -> relying party
 
-| Method | Path                                  | Arguments |
-| ------ | ------------------------------------- | --------- |
-| GET    | /la0.2/api/register?session=sessionID | N/A       |
-| GET    | /la0.2/api/login?session=sessionID    | N/A       |
+| Method | Path                                | Arguments |
+| ------ | ----------------------------------- | --------- |
+| GET    | /la3/api/register?session=sessionID | N/A       |
+| GET    | /la3/api/login?session=sessionID    | N/A       |
 
 The potential responses are:
 
@@ -221,9 +259,9 @@ The client can logout using the following method.
 
 ### client -> relying party
 
-| Method | Path                                | Arguments |
-| ------ | ----------------------------------- | --------- |
-| GET    | /la0.2/api/logout?session=sessionID | N/A       |
+| Method | Path                          | Arguments |
+| ------ | ----------------------------- | --------- |
+| GET    | /la3/logout?session=sessionID | N/A       |
 
 The potential responses are:
 
