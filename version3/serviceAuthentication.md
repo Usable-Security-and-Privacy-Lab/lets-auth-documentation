@@ -171,7 +171,7 @@ should find the key pair it has previously used for this relying party in the
 vault.
 
 The authenticator then creates a `sessionCertificate`, which contains
-(sessionID, sessionPublicKey) and is signed by the `accountPrivateKey`.
+`(sessionID, sessionPublicKey)` and is signed by the `accountPrivateKey`.
 
 ## Registration
 
@@ -181,20 +181,35 @@ authorize the login:
 
 ### authenticator -> relying party
 
-| Method | Path          | Arguments                              |
-| ------ | ------------- | -------------------------------------- |
-| POST   | /la3/register | accountCertificate, sessionCertificate |
+| Method | Path          | Arguments                                                |
+| ------ | ------------- | -------------------------------------------------------- |
+| POST   | /la3/register | accountCertificate, sessionCertificate, sessionSignature |
+
+The `sessionSignature` is a signature of the `sessionID` that is listed in the
+`sessionCertificate`. It is signed by `sessionPrivateKey`.
 
 The potential responses are:
 
 - 200 OK : success
 - 403 Forbidden: invalid certificates
 
-The relying party validates the `accountCertificate` using the `CAPublicKey`.
-For demo purposes, the replying party can be configured with the `CAPublicKey`.
-The relying party validates the `sessionCertificate` using the
-`accountPublicKey` and ensures the `sessionID` is one it recently issued. If
-these are both valid, the relying party uses the `accountID` as an account
+The relying party takes the following steps:
+
+- It validates the signature on the `accountCertificate` using the
+  `CAPublicKey`. For demo purposes, the relying party can be configured with the
+  `CAPublicKey`.
+
+- It ensures the `accountCertificate` is still valid, based on its lifetime.
+
+- It validates the signature on the `sessionCertificate` using the
+  `accountPublicKey`, which is contained in the `accountCertificate`.
+
+- It validates the `sessionSignature` using the `sessionPublicKey`, which is
+  contained in the `sessionCertificate`.
+
+- It ensures the `sessionID` is one it recently issued.
+
+If all of these are valid, the relying party uses the `accountID` as an account
 identifier and stores the `sessionPublicKey` with that account.
 
 ## Login
@@ -204,20 +219,38 @@ then it sends a POST request to the relying party to authorize the login:
 
 ### authenticator -> relying party
 
-| Method | Path       | Arguments                              |
-| ------ | ---------- | -------------------------------------- |
-| POST   | /la3/login | accountCertificate, sessionCertificate |
+| Method | Path       | Arguments                                                |
+| ------ | ---------- | -------------------------------------------------------- |
+| POST   | /la3/login | accountCertificate, sessionCertificate, sessionSignature |
+
+The `sessionSignature` is a signature of the `sessionID` that is listed in the
+`sessionCertificate`. It is signed by `sessionPrivateKey`.
 
 The potential responses are:
 
 - 200 OK : success
 - 403 Forbidden: invalid certificates
 
-The relying party validates the `accountCertificate` using the `CAPublicKey`. It
-validates the `sessionCertificate` using the `accountPublicKey` and ensures the
-`sessionID` is one it recently issued. It compares the `sessionPublicKey` in the
-`sessionCertificate` with the one stored in the account. if all of these checks
-pass, the relying party OKs the login.
+The relying party takes the following steps:
+
+- It validates the signature on the `accountCertificate` using the
+  `CAPublicKey`. For demo purposes, the relying party can be configured with the
+  `CAPublicKey`.
+
+- It ensures the `accountCertificate` is still valid, based on its lifetime.
+
+- It validates the signature on the `sessionCertificate` using the
+  `accountPublicKey`, which is contained in the `accountCertificate`.
+
+- It validates the `sessionSignature` using the `sessionPublicKey`, which is
+  contained in the `sessionCertificate`.
+
+- It ensures the `sessionID` is one it recently issued.
+
+- It ensures the `sessionPublicKey` in the `sessionCertificate` matches the one
+  stored in the account.
+
+If all of these checks pass, the relying party OKs the login.
 
 ## Notifying the client
 
@@ -248,10 +281,18 @@ The potential responses are:
 - 200 OK : success
 - 403 Forbidden: request denied
 
-Alternatively, the client can open a web socket to the back end, and then the
-back end can push a message when the registration or login is done. Long polling
-is preferred due to its simplicity -- the back end does not need to support an
-extra web socket for these requests.
+## Sessions
+
+Implementing the login and registration process means the relying party needs
+to:
+
+- keep track of session IDs it has issued for each account
+- keep a lifetime for each session ID and periodically prune old session IDs
+  that have not been authorized for login
+- mark session IDs that have been authorized for login as valid
+- provide an interface that allows the user logging in to decide how long their
+  session should be valid (e.g. hours, days, weeks) or allow them to be valid
+  indefinitely, depending on the type of site
 
 ## Logout
 
